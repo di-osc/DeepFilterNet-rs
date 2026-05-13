@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Rust
+/target/
+
+# Build outputs
+/dist/
+/wheels/
+*.egg-info/
+*.so
+*.dylib
+*.dll
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/

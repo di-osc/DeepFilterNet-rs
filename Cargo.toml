@@ -1,0 +1,20 @@
+[package]
+name = "deepfilternet-rs"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+description = "PyO3 bindings for the official DeepFilterNet Rust realtime runtime"
+repository = "https://github.com/di-osc/DeepFilterNet-rs"
+
+[lib]
+name = "_native"
+crate-type = ["cdylib"]
+path = "rust/src/lib.rs"
+
+[dependencies]
+anyhow = "1.0"
+ndarray = "0.15"
+numpy = "0.22"
+pyo3 = { version = "0.22", features = ["extension-module"] }
+deep_filter = { git = "https://github.com/Rikorose/DeepFilterNet", tag = "v0.5.6", package = "deep_filter", default-features = false, features = ["tract", "default-model"] }
