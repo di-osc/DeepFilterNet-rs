@@ -48,7 +48,7 @@ jobs:
       - uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --find-interpreter
+          args: --release --out dist --interpreter python3.10 python3.11 python3.12
           sccache: true
           manylinux: auto
       - uses: actions/upload-artifact@v4
