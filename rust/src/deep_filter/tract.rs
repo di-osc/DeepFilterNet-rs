@@ -68,22 +68,7 @@ impl DfParams {
 impl Default for DfParams {
     #[allow(unreachable_code)]
     fn default() -> Self {
-        #[cfg(feature = "default-model-ll")]
-        {
-            log::debug!("Loading model DeepFilterNet3_ll_onnx.tar.gz");
-            return DfParams::from_bytes(include_bytes!(
-                "../../models/DeepFilterNet3_ll_onnx.tar.gz"
-            ))
-            .expect("Could not load model config");
-        }
-        #[cfg(feature = "default-model")]
-        {
-            log::debug!("Loading model DeepFilterNet3_onnx.tar.gz");
-            DfParams::from_bytes(include_bytes!("../../models/DeepFilterNet3_onnx.tar.gz"))
-                .expect("Could not load model config")
-        }
-        #[cfg(not(feature = "default-model"))]
-        panic!("Not compiled with a default model")
+        panic!("No embedded default model is compiled into the Rust extension")
     }
 }
 

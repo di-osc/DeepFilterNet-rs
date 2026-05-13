@@ -1,14 +1,18 @@
 use anyhow::{Context, Result};
+use log::LevelFilter;
 use ndarray::Array2;
 use numpy::{PyArray1, PyReadonlyArray1};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
+use std::sync::Once;
 
 #[path = "deep_filter/lib.rs"]
 mod deep_filter;
 
 use crate::deep_filter::tract::{DfParams, DfTract, ReduceMask, RuntimeParams};
+
+static LOGGER_INIT: Once = Once::new();
 
 fn to_py_err(err: anyhow::Error) -> PyErr {
     let details = err
@@ -50,7 +54,7 @@ impl DeepFilterNetRealtime {
         max_db_erb_thresh: f32,
         max_db_df_thresh: f32,
     ) -> PyResult<Self> {
-        let _ = log_level;
+        init_logging(log_level.as_deref());
         let model = create_model(
             model_path,
             atten_lim,
@@ -163,9 +167,35 @@ fn create_model(
         .with_mask_reduce(ReduceMask::NONE);
     let df_params = match model_path {
         Some(path) => DfParams::new(path.into()).context("Could not load DeepFilterNet model")?,
-        None => DfParams::default(),
+        None => {
+            return Err(anyhow::anyhow!(
+                "No default model is embedded in the Rust extension; provide a model path"
+            ))
+        }
     };
     DfTract::new(df_params, &r_params).context("Could not initialize DeepFilterNet runtime")
+}
+
+fn init_logging(log_level: Option<&str>) {
+    LOGGER_INIT.call_once(|| {
+        let mut builder = env_logger::Builder::new();
+        builder.filter_level(LevelFilter::Trace);
+        builder.format_timestamp(None);
+        let _ = builder.try_init();
+    });
+    log::set_max_level(parse_log_level(log_level));
+}
+
+fn parse_log_level(log_level: Option<&str>) -> LevelFilter {
+    match log_level.unwrap_or("warn").to_ascii_lowercase().as_str() {
+        "off" => LevelFilter::Off,
+        "error" => LevelFilter::Error,
+        "warn" | "warning" => LevelFilter::Warn,
+        "info" => LevelFilter::Info,
+        "debug" => LevelFilter::Debug,
+        "trace" => LevelFilter::Trace,
+        _ => LevelFilter::Warn,
+    }
 }
 
 #[pymodule]

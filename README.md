@@ -7,10 +7,10 @@ streaming runtime. It is intended for realtime audio enhancement pipelines that
 need a Python API without shelling out to the `deep-filter` binary.
 
 The required DeepFilterNet Rust runtime source is inlined under
-`rust/src/deep_filter` from upstream `Rikorose/DeepFilterNet` tag `v0.5.6`,
-together with the bundled `DeepFilterNet3_onnx.tar.gz` default model under
-`rust/models`. Builds do not depend on the upstream Git repository at compile
-time.
+`rust/src/deep_filter` from upstream `Rikorose/DeepFilterNet` tag `v0.5.6`.
+The bundled default model now ships as Python package data under
+`python/deepfilternet_rs/models`. Builds do not depend on the upstream Git
+repository at compile time.
 
 The package also includes a small `deepfilternet` command line tool for
 denoising common audio files through `ffmpeg`-based decode and encode steps.
@@ -43,6 +43,10 @@ enhanced = processor.process_chunk(audio)
 tail = processor.finalize()
 ```
 
+When `model_path=None`, the Python package automatically resolves the bundled
+default model file from `deepfilternet_rs.models` and passes its path into the
+Rust runtime.
+
 ## CLI
 
 ```bash
@@ -73,7 +77,7 @@ Parameter tuning notes:
 - `--atten-lim`: controls how aggressively extra attenuation is allowed. Lower values usually keep more room tone and background ambience, but noise may remain more obvious. Higher values push stronger suppression. `100.0` is the least restrictive default.
 - `--post-filter-beta`: controls extra residual-noise cleanup after the main model pass. `0.0` is the most natural starting point. Raising it can make noisy clips sound cleaner, but if it is too high, speech may become thinner, duller, or slightly watery.
 - `--compensate-delay`: enabled by default and recommended for normal file output. It removes the model delay so the result lines up better with the source timing. Turning it off is mostly useful for debugging or low-level alignment experiments.
-- `--log-level`: use `warn` or `error` for normal runs. Use `info`, `debug`, or `trace` when you want to inspect backend behavior and troubleshoot model or ffmpeg issues.
+- `--log-level`: now controls both the Rust runtime logger and `ffmpeg -v ...`. Use `warn` or `error` for normal runs. Use `info` or `debug` when you want more diagnostics. `trace` is intentionally very noisy and may print large amounts of model-loading and graph-parsing output.
 - `--model-path`: leave unset to use the bundled default model. Set it when you want to test or ship a different official DeepFilterNet model package.
 - `--min-db-thresh`, `--max-db-erb-thresh`, `--max-db-df-thresh`: advanced SNR threshold parameters passed directly to the underlying DeepFilterNet runtime. They affect when different decoder paths remain active across noisier or cleaner regions. These are useful for controlled experiments and model tuning, but they are much easier to mis-tune than `--atten-lim` or `--post-filter-beta`, so most users should leave them at their defaults.
 
@@ -92,11 +96,14 @@ Constructor arguments:
 
 | Argument | Type | Default | Description |
 |---|---|---|---|
-| `model_path` | `str | None` | `None` | Optional official DeepFilterNet `.tar.gz` model path. `None` uses the bundled default model from the Rust crate. |
+| `model_path` | `str | None` | `None` | Optional official DeepFilterNet `.tar.gz` model path. `None` uses the bundled default model from the Python package resources. |
 | `atten_lim` | `float` | `100.0` | Attenuation limit in dB. `100.0` means no explicit limit. |
-| `log_level` | `str | None` | `None` | Reserved for compatibility with existing callers. |
+| `log_level` | `str | None` | `None` | Runtime log verbosity. Values like `error`, `warn`, `info`, `debug`, and `trace` affect Rust-side logging. |
 | `compensate_delay` | `bool` | `True` | Drop initial algorithmic-delay samples from output. |
 | `post_filter_beta` | `float` | `0.0` | Post-filter beta. `0.0` disables the post-filter. |
+| `min_db_thresh` | `float` | `-15.0` | Advanced local SNR threshold for the decoder DNN path. |
+| `max_db_erb_thresh` | `float` | `35.0` | Advanced upper SNR threshold for the ERB decoder path. |
+| `max_db_df_thresh` | `float` | `35.0` | Advanced upper SNR threshold for the DF decoder path. |
 
 Properties:
 

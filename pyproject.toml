@@ -43,3 +43,7 @@ cache-keys = [
 python-source = "python"
 module-name = "deepfilternet_rs._native"
 features = ["pyo3/extension-module"]
+include = [
+    "python/deepfilternet_rs/py.typed",
+    "python/deepfilternet_rs/models/*.tar.gz",
+]

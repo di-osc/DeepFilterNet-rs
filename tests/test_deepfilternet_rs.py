@@ -44,6 +44,91 @@ def test_deepfilternet_realtime_accepts_snr_threshold_kwargs() -> None:
     processor.close()
 
 
+def test_cli_uses_packaged_default_model_when_model_path_is_none(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from deepfilternet_rs import cli
+
+    input_path = tmp_path / "input.wav"
+    output_path = tmp_path / "output.wav"
+    input_path.write_bytes(b"fake")
+
+    packaged_model = tmp_path / "packaged-model.tar.gz"
+    packaged_model.write_bytes(b"model")
+    captured: dict[str, object] = {}
+
+    class FakeProcessor:
+        sample_rate = 48000
+        frame_length = 480
+
+        def __init__(self, **kwargs) -> None:
+            captured["init"] = kwargs
+
+        def process_chunk(self, audio: np.ndarray) -> np.ndarray:
+            return audio
+
+        def finalize(self) -> np.ndarray:
+            return np.array([], dtype=np.float32)
+
+    monkeypatch.setattr(cli, "DeepFilterNetRealtime", FakeProcessor)
+    monkeypatch.setattr(
+        cli, "_decode_audio", lambda path, sample_rate, log_level: np.zeros(4, dtype=np.float32)
+    )
+    monkeypatch.setattr(
+        cli, "_encode_audio_with_log_level", lambda path, audio, sample_rate, log_level: None
+    )
+    monkeypatch.setattr(cli, "get_default_model_path", lambda: packaged_model)
+
+    exit_code = cli.main([str(input_path), str(output_path)])
+
+    assert exit_code == 0
+    assert captured["init"]["model_path"] == str(packaged_model)
+
+
+def test_cli_prefers_explicit_model_path_over_packaged_default(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from deepfilternet_rs import cli
+
+    input_path = tmp_path / "input.wav"
+    output_path = tmp_path / "output.wav"
+    explicit_model = tmp_path / "explicit-model.tar.gz"
+    packaged_model = tmp_path / "packaged-model.tar.gz"
+    input_path.write_bytes(b"fake")
+    explicit_model.write_bytes(b"explicit")
+    packaged_model.write_bytes(b"packaged")
+    captured: dict[str, object] = {}
+
+    class FakeProcessor:
+        sample_rate = 48000
+        frame_length = 480
+
+        def __init__(self, **kwargs) -> None:
+            captured["init"] = kwargs
+
+        def process_chunk(self, audio: np.ndarray) -> np.ndarray:
+            return audio
+
+        def finalize(self) -> np.ndarray:
+            return np.array([], dtype=np.float32)
+
+    monkeypatch.setattr(cli, "DeepFilterNetRealtime", FakeProcessor)
+    monkeypatch.setattr(
+        cli, "_decode_audio", lambda path, sample_rate, log_level: np.zeros(4, dtype=np.float32)
+    )
+    monkeypatch.setattr(
+        cli, "_encode_audio_with_log_level", lambda path, audio, sample_rate, log_level: None
+    )
+    monkeypatch.setattr(cli, "get_default_model_path", lambda: packaged_model)
+
+    exit_code = cli.main(
+        [str(input_path), str(output_path), "--model-path", str(explicit_model)]
+    )
+
+    assert exit_code == 0
+    assert captured["init"]["model_path"] == str(explicit_model)
+
+
 def test_cli_parser_defaults() -> None:
     from deepfilternet_rs.cli import build_parser
 
@@ -117,8 +202,9 @@ def test_cli_processes_wav_with_runtime_defaults(
     exit_code = cli.main([str(input_path), str(output_path)])
 
     assert exit_code == 0
+    expected_default_model = str(cli.get_default_model_path())
     assert captured["init"] == {
-        "model_path": None,
+        "model_path": expected_default_model,
         "atten_lim": 100.0,
         "log_level": "warn",
         "compensate_delay": True,
@@ -209,7 +295,7 @@ def test_cli_uses_ffmpeg_for_decode_resample_and_encode(
     assert len(captured["commands"]) == 2
     decode_cmd = captured["commands"][0]
     assert Path(decode_cmd[0]).name == "ffmpeg"
-    assert decode_cmd[1:3] == ["-v", "error"]
+    assert decode_cmd[1:3] == ["-v", "warning"]
     assert decode_cmd[-1] == "pipe:1"
     assert "-i" in decode_cmd and str(input_path) in decode_cmd
     assert "-ac" in decode_cmd and decode_cmd[decode_cmd.index("-ac") + 1] == "1"
@@ -217,7 +303,7 @@ def test_cli_uses_ffmpeg_for_decode_resample_and_encode(
 
     encode_cmd = captured["commands"][1]
     assert Path(encode_cmd[0]).name == "ffmpeg"
-    assert encode_cmd[1:3] == ["-v", "error"]
+    assert encode_cmd[1:3] == ["-v", "warning"]
     assert encode_cmd[-1] == str(output_path)
     assert "-i" in encode_cmd and "pipe:0" in encode_cmd
     assert "-ar" in encode_cmd and encode_cmd[encode_cmd.index("-ar") + 1] == "48000"
@@ -225,6 +311,52 @@ def test_cli_uses_ffmpeg_for_decode_resample_and_encode(
     np.testing.assert_allclose(captured["process_chunk"], decoded, rtol=1e-6, atol=1e-6)
     encoded = np.frombuffer(captured["encoded_bytes"], dtype=np.float32)
     np.testing.assert_allclose(encoded, np.array([0.0, 0.125, -0.125, 0.25, 0.125], dtype=np.float32))
+
+
+def test_cli_maps_trace_log_level_to_ffmpeg_trace(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from deepfilternet_rs import cli
+
+    input_path = tmp_path / "input.mp3"
+    output_path = tmp_path / "output.flac"
+    input_path.write_bytes(b"fake")
+
+    captured: dict[str, object] = {"commands": []}
+    decoded = np.array([0.0, 0.25], dtype=np.float32)
+
+    class FakeProcessor:
+        sample_rate = 48000
+        frame_length = 480
+
+        def __init__(self, **kwargs) -> None:
+            pass
+
+        def process_chunk(self, audio: np.ndarray) -> np.ndarray:
+            return audio
+
+        def finalize(self) -> np.ndarray:
+            return np.array([], dtype=np.float32)
+
+    def fake_run(*args, **kwargs):
+        cmd = list(args[0])
+        captured["commands"].append(cmd)
+        if "-f" in cmd and "f32le" in cmd and "pipe:1" in cmd:
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout=decoded.tobytes())
+        if "-f" in cmd and "f32le" in cmd and "pipe:0" in cmd:
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout=b"")
+        raise AssertionError(f"Unexpected command: {cmd}")
+
+    monkeypatch.setattr(cli, "DeepFilterNetRealtime", FakeProcessor)
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    exit_code = cli.main(
+        [str(input_path), str(output_path), "--log-level", "trace"]
+    )
+
+    assert exit_code == 0
+    assert captured["commands"][0][1:3] == ["-v", "trace"]
+    assert captured["commands"][1][1:3] == ["-v", "trace"]
 
 
 def test_cli_passes_custom_snr_thresholds(monkeypatch, tmp_path: Path) -> None:
@@ -264,8 +396,12 @@ def test_cli_passes_custom_snr_thresholds(monkeypatch, tmp_path: Path) -> None:
             return np.array([], dtype=np.float32)
 
     monkeypatch.setattr(cli, "DeepFilterNetRealtime", FakeProcessor)
-    monkeypatch.setattr(cli, "_decode_audio", lambda path, sample_rate: np.zeros(4, dtype=np.float32))
-    monkeypatch.setattr(cli, "_encode_audio", lambda path, audio, sample_rate: None)
+    monkeypatch.setattr(
+        cli, "_decode_audio", lambda path, sample_rate, log_level: np.zeros(4, dtype=np.float32)
+    )
+    monkeypatch.setattr(
+        cli, "_encode_audio_with_log_level", lambda path, audio, sample_rate, log_level: None
+    )
 
     exit_code = cli.main(
         [

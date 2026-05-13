@@ -8,7 +8,7 @@ import subprocess
 import numpy as np
 from jsonargparse import ArgumentParser
 
-from deepfilternet_rs import DeepFilterNetRealtime
+from deepfilternet_rs import DeepFilterNetRealtime, get_default_model_path
 
 
 def build_parser() -> ArgumentParser:
@@ -117,13 +117,24 @@ def _ensure_ffmpeg() -> str:
     return ffmpeg
 
 
-def _decode_audio(path: Path, sample_rate: int) -> np.ndarray:
+def _ffmpeg_log_level(log_level: str) -> str:
+    normalized = log_level.lower()
+    if normalized == "warn":
+        return "warning"
+    if normalized in {"off", "error", "warning", "info", "debug", "trace"}:
+        return normalized
+    if normalized == "verbose":
+        return "verbose"
+    return "error"
+
+
+def _decode_audio(path: Path, sample_rate: int, log_level: str) -> np.ndarray:
     ffmpeg = _ensure_ffmpeg()
     result = subprocess.run(
         [
             ffmpeg,
             "-v",
-            "error",
+            _ffmpeg_log_level(log_level),
             "-i",
             str(path),
             "-f",
@@ -141,13 +152,20 @@ def _decode_audio(path: Path, sample_rate: int) -> np.ndarray:
 
 
 def _encode_audio(path: Path, audio: np.ndarray, sample_rate: int) -> None:
+    ffmpeg_log_level = "error"
+    return _encode_audio_with_log_level(path, audio, sample_rate, ffmpeg_log_level)
+
+
+def _encode_audio_with_log_level(
+    path: Path, audio: np.ndarray, sample_rate: int, log_level: str
+) -> None:
     ffmpeg = _ensure_ffmpeg()
     path.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
             ffmpeg,
             "-v",
-            "error",
+            _ffmpeg_log_level(log_level),
             "-y",
             "-f",
             "f32le",
@@ -179,7 +197,7 @@ def denoise_audio(
     max_db_df_thresh: float,
 ) -> None:
     processor = DeepFilterNetRealtime(
-        model_path=str(model_path) if model_path is not None else None,
+        model_path=str(model_path) if model_path is not None else str(get_default_model_path()),
         atten_lim=atten_lim,
         log_level=log_level,
         compensate_delay=compensate_delay,
@@ -188,11 +206,11 @@ def denoise_audio(
         max_db_erb_thresh=max_db_erb_thresh,
         max_db_df_thresh=max_db_df_thresh,
     )
-    audio = _decode_audio(input_path, processor.sample_rate)
+    audio = _decode_audio(input_path, processor.sample_rate, log_level)
     enhanced = processor.process_chunk(audio)
     tail = processor.finalize()
     output_audio = np.concatenate([enhanced, tail]).astype(np.float32, copy=False)
-    _encode_audio(output_path, output_audio, processor.sample_rate)
+    _encode_audio_with_log_level(output_path, output_audio, processor.sample_rate, log_level)
 
 
 def main(argv: list[str] | None = None) -> int:
