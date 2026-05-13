@@ -26,6 +26,18 @@ built with `maturin`. Prebuilt wheels do not require Rust on the target machine.
 
 ## Usage
 
+`DeepFilterNetRealtime` is a streaming API. It does not read files for you, and
+it expects already-decoded mono audio samples as a one-dimensional
+`numpy.float32` array.
+
+Important input requirements:
+
+- Sample rate must match `processor.sample_rate`. Official bundled models use `48000 Hz`.
+- Audio must be mono. If your source is stereo or multichannel, downmix it before calling `process_chunk`.
+- Samples should be normalized float audio, typically in the `[-1.0, 1.0]` range.
+- Input dtype should be `np.float32`. Convert explicitly if your upstream decoder returns `int16`, `float64`, or another dtype.
+- You can pass any chunk length to `process_chunk()`. It does not need to equal `frame_length`, but `frame_length` is still useful as a natural streaming block size.
+
 ```python
 import numpy as np
 from deepfilternet_rs import DeepFilterNetRealtime
@@ -46,6 +58,83 @@ tail = processor.finalize()
 When `model_path=None`, the Python package automatically resolves the bundled
 default model file from `deepfilternet_rs.models` and passes its path into the
 Rust runtime.
+
+### Streaming Example
+
+The example below shows a more realistic streaming loop:
+
+```python
+from pathlib import Path
+import wave
+
+import numpy as np
+
+from deepfilternet_rs import DeepFilterNetRealtime
+
+
+def read_wav_mono_48k(path: str | Path) -> np.ndarray:
+    with wave.open(str(path), "rb") as wav_file:
+        channels = wav_file.getnchannels()
+        sample_rate = wav_file.getframerate()
+        sample_width = wav_file.getsampwidth()
+
+        if channels != 1:
+            raise ValueError(f"expected mono wav, got {channels} channels")
+        if sample_rate != 48000:
+            raise ValueError(f"expected 48000 Hz wav, got {sample_rate} Hz")
+        if sample_width != 2:
+            raise ValueError(f"expected 16-bit PCM wav, got {sample_width * 8}-bit")
+
+        pcm = np.frombuffer(
+            wav_file.readframes(wav_file.getnframes()),
+            dtype=np.int16,
+        )
+    return pcm.astype(np.float32) / np.iinfo(np.int16).max
+
+
+def write_wav_mono_48k(path: str | Path, audio: np.ndarray) -> None:
+    pcm = np.clip(audio, -1.0, 1.0)
+    pcm = np.round(pcm * np.iinfo(np.int16).max).astype(np.int16)
+    with wave.open(str(path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(48000)
+        wav_file.writeframes(pcm.tobytes())
+
+
+processor = DeepFilterNetRealtime(
+    model_path=None,
+    atten_lim=100.0,
+    log_level="warn",
+    compensate_delay=True,
+    post_filter_beta=0.0,
+)
+
+audio = read_wav_mono_48k("input.wav")
+chunk_size = processor.frame_length * 10
+chunks: list[np.ndarray] = []
+
+for start in range(0, len(audio), chunk_size):
+    chunk = audio[start : start + chunk_size].astype(np.float32, copy=False)
+    enhanced = processor.process_chunk(chunk)
+    if enhanced.size:
+        chunks.append(enhanced)
+
+tail = processor.finalize()
+if tail.size:
+    chunks.append(tail)
+
+output = np.concatenate(chunks) if chunks else np.array([], dtype=np.float32)
+write_wav_mono_48k("output.wav", output)
+```
+
+Notes about streaming behavior:
+
+- `process_chunk()` may return fewer samples than you pass in at the beginning because the model has internal buffering and optional delay compensation.
+- `finalize()` is required at the end of a stream. It flushes the remaining buffered audio and returns the tail that has not been emitted yet.
+- If you skip `finalize()`, you will usually lose the last buffered part of the stream.
+- If you do not want the tail and want to abort a stream early, call `close()` instead.
+- For non-WAV inputs, or for automatic resampling/downmixing, prefer the `deepfilternet input.xxx output.yyy` CLI, which uses `ffmpeg`.
 
 ## CLI
 
@@ -119,6 +208,14 @@ Methods:
 | `process_chunk(audio)` | Process a one-dimensional `float32` numpy array and return enhanced `float32` samples. The input can be any length; incomplete frames are buffered. |
 | `finalize()` | Flush buffered samples with zero padding and close the processor. |
 | `close()` | Clear buffers and close the processor without flushing. |
+
+Practical streaming notes:
+
+- `process_chunk(audio)` expects mono `np.float32` samples at exactly `sample_rate`.
+- If your input is not already `48000 Hz`, resample it before using the Python streaming API.
+- If your input is stereo, downmix it before calling `process_chunk(audio)`.
+- `frame_length` is a good default chunk size, but larger multiples such as `frame_length * 10` are also fine.
+- The output length from `process_chunk(audio)` is not guaranteed to equal the input length for every call, especially at the beginning of a stream when delay compensation is enabled.
 
 ## Release
 
