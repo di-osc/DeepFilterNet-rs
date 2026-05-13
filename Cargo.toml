@@ -17,4 +17,4 @@ anyhow = "1.0"
 ndarray = "0.15"
 numpy = "0.22"
 pyo3 = { version = "0.22", features = ["extension-module"] }
-deep_filter = { git = "https://github.com/Rikorose/DeepFilterNet", tag = "v0.5.6", package = "deep_filter", default-features = false, features = ["tract", "default-model"] }
+deep_filter = { path = "vendor/libDF", package = "deep_filter", default-features = false, features = ["tract", "default-model"] }

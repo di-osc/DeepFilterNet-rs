@@ -6,6 +6,11 @@ This package exposes a small PyO3 wrapper around DeepFilterNet's Rust `DfTract`
 streaming runtime. It is intended for realtime audio enhancement pipelines that
 need a Python API without shelling out to the `deep-filter` binary.
 
+The required DeepFilterNet Rust crate source is vendored under `vendor/libDF`
+from upstream `Rikorose/DeepFilterNet` tag `v0.5.6`, together with the bundled
+`DeepFilterNet3_onnx.tar.gz` default model under `vendor/models`. Builds do not
+depend on the upstream Git repository at compile time.
+
 ## Install
 
 ```bash
@@ -65,6 +70,6 @@ Methods:
 
 ## Release
 
-Publishing is handled by GitHub Actions with PyPI Trusted Publishing. Create a
-GitHub release or run the release workflow manually after configuring the PyPI
-project trust relationship for this repository.
+Publishing is handled by GitHub Actions. Create a GitHub release or run the
+release workflow manually after configuring the `PYPI_API_TOKEN` repository
+secret.

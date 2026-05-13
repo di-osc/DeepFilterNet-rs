@@ -161,7 +161,6 @@ dependencies = [
 [[package]]
 name = "deep_filter"
 version = "0.5.6"
-source = "git+https://github.com/Rikorose/DeepFilterNet?tag=v0.5.6#978576aa8400552a4ce9730838c635aa30db5e61"
 dependencies = [
  "anyhow",
  "flate2",
