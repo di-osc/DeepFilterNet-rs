@@ -159,8 +159,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "deep_filter"
-version = "0.5.6"
+name = "deepfilternet-rs"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "flate2",
@@ -168,27 +168,17 @@ dependencies = [
  "log",
  "ndarray 0.15.6",
  "num-complex",
+ "numpy",
+ "pyo3",
  "realfft",
  "rubato",
  "rust-ini",
- "rustfft",
  "tar",
  "thiserror",
  "tract-core",
  "tract-hir",
  "tract-onnx",
  "tract-pulse",
-]
-
-[[package]]
-name = "deepfilternet-rs"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "deep_filter",
- "ndarray 0.15.6",
- "numpy",
- "pyo3",
 ]
 
 [[package]]
@@ -557,7 +547,6 @@ dependencies = [
  "num-integer",
  "num-traits",
  "rawpointer",
- "serde",
 ]
 
 [[package]]

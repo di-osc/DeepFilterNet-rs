@@ -18,7 +18,10 @@ classifiers = [
     "Programming Language :: Rust",
     "Topic :: Multimedia :: Sound/Audio",
 ]
-dependencies = ["numpy>=1.24"]
+dependencies = ["numpy>=1.24", "jsonargparse>=4.35,<5"]
+
+[project.scripts]
+deepfilternet = "deepfilternet_rs.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/di-osc/DeepFilterNet-rs"
@@ -28,6 +31,13 @@ Issues = "https://github.com/di-osc/DeepFilterNet-rs/issues"
 [build-system]
 requires = ["maturin>=1.8,<2.0"]
 build-backend = "maturin"
+
+[tool.uv]
+cache-keys = [
+    {file = "pyproject.toml"},
+    {file = "rust/Cargo.toml"}, 
+    {file = "**/*.rs"}
+]
 
 [tool.maturin]
 python-source = "python"

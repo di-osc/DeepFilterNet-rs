@@ -12,9 +12,39 @@ name = "_native"
 crate-type = ["cdylib"]
 path = "rust/src/lib.rs"
 
+[features]
+default = ["default-model", "tract"]
+default-model = []
+default-model-ll = []
+timings = []
+transforms = []
+dataset = ["transforms"]
+capi = ["tract", "default-model"]
+tract = ["transforms", "logging"]
+wav-utils = []
+logging = []
+bin = []
+use-jemalloc = []
+nightly-features = []
+hdf5-static = []
+vorbis = []
+flac = []
+
 [dependencies]
 anyhow = "1.0"
+flate2 = "1.0.24"
+ini = { package = "rust-ini", version = "^0.19" }
+itertools = "0.10"
+log = { version = "0.4", features = ["std"] }
 ndarray = "0.15"
+num-complex = { version = "^0.4", features = ["serde"] }
 numpy = "0.22"
 pyo3 = { version = "0.22", features = ["extension-module"] }
-deep_filter = { path = "vendor/libDF", package = "deep_filter", default-features = false, features = ["tract", "default-model"] }
+realfft = "^3.1.0"
+rubato = "0.14"
+tar = "0.4.38"
+thiserror = "1.0"
+tract-core = "^0.19.4"
+tract-hir = "^0.19.4"
+tract-onnx = "^0.19.4"
+tract-pulse = "^0.19.4"

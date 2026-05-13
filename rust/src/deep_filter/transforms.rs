@@ -4,7 +4,7 @@ use ndarray::{prelude::*, Slice};
 use rubato::{FftFixedInOut, Resampler};
 use thiserror::Error;
 
-use crate::*;
+use super::*;
 
 type Result<T> = std::result::Result<T, TransformError>;
 
